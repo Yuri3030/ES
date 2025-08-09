@@ -11,19 +11,24 @@ from app.schemas import UserCreate, UserResponse
 from app.schemas import LoginRequest, LoginResponse
 # Importa a função de criação de token
 from datetime import timedelta
-from app.auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
-# Importa a função para obter o usuário atual
-from app.auth import get_current_user
+from app.auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+
 # para conseguir o autorization automático no sweagger
 from fastapi.security import OAuth2PasswordRequestForm
 # para a criação do administrador padrão
 from app.database import SessionLocal
-from app.models import User 
+from app.models import User, Mood
+
 # para receber o email no corpo da requisição
 from fastapi import Body
 
+from app.schemas import MoodCreate, MoodResponse
+from app.models import User, Reminder
+from app.schemas import ReminderCreate, ReminderResponse
+
+
 # Cria as tabelas automaticamente
-Base.metadata.create_all(bind=engine)
+#Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -163,3 +168,112 @@ def create_default_admin():
     db.close()
 
 create_default_admin()
+
+
+# Criar registro de humor (do usuário logado)
+@app.post("/moods", response_model=MoodResponse)
+def create_mood(payload: MoodCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    entry = Mood(
+        user_id=current_user.id,
+        score=payload.score,
+        mood_type=payload.mood_type,
+        comment=payload.comment
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+# Listar meus registros de humor
+@app.get("/moods", response_model=list[MoodResponse])
+def list_my_moods(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return db.query(Mood).filter(Mood.user_id == current_user.id).order_by(Mood.created_at.desc()).all()
+
+# (Opcional) Admin lista humores de um usuário específico por e-mail
+@app.get("/users/{email}/moods", response_model=list[MoodResponse])
+def list_user_moods_as_admin(
+    email: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.email != "admin@example.com":
+        raise HTTPException(status_code=403, detail="Apenas o administrador pode acessar os registros de outros usuários.")
+
+    target = db.query(User).filter(User.email == email).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    return db.query(Mood).filter(Mood.user_id == target.id).order_by(Mood.created_at.desc()).all()# criar lembrete
+
+# criar lembrete
+@app.post("/reminders", response_model=ReminderResponse)
+def create_reminder(
+    payload: ReminderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reminder = Reminder(
+        user_id=current_user.id,
+        message=payload.message,
+        due_at=payload.due_at,
+    )
+    db.add(reminder)
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+# listar só meus lembretes
+@app.get("/reminders", response_model=list[ReminderResponse])
+def list_my_reminders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return (
+        db.query(Reminder)
+        .filter(Reminder.user_id == current_user.id)
+        .order_by(Reminder.due_at.asc())
+        .all()
+    )
+
+# marcar como feito / desfazer
+@app.patch("/reminders/{reminder_id}/done", response_model=ReminderResponse)
+def toggle_done(
+    reminder_id: int,
+    done: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reminder = (
+        db.query(Reminder)
+        .filter(Reminder.id == reminder_id, Reminder.user_id == current_user.id)
+        .first()
+    )
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Lembrete não encontrado")
+    reminder.done = done
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+# deletar
+@app.delete("/reminders/{reminder_id}")
+def delete_reminder(
+    reminder_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reminder = (
+        db.query(Reminder)
+        .filter(Reminder.id == reminder_id, Reminder.user_id == current_user.id)
+        .first()
+    )
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Lembrete não encontrado")
+    db.delete(reminder)
+    db.commit()
+    return {"message": "Lembrete deletado com sucesso"}
+
+

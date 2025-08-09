@@ -1,4 +1,10 @@
 from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, conint
+from datetime import datetime
+from enum import Enum
+from pydantic import BaseModel, Field
+from typing import Optional
+
 
 # Modelo para entrada de cadastro
 class UserCreate(BaseModel):
@@ -25,3 +31,43 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     message: str
     token: str | None = None  
+
+# Modelos para Mood
+class MoodType(str, Enum):
+    alegria = "alegria"
+    tristeza = "tristeza"
+    angustia = "angustia"
+    magoa = "mágoa"
+    ansiedade = "ansiedade"
+
+class MoodCreate(BaseModel):
+    score: int = Field(..., ge=1, le=5)
+    mood_type: MoodType  # <-- escolha obrigatória
+    comment: Optional[str] = None
+
+class MoodResponse(BaseModel):
+    id: int
+    score: int
+    mood_type: MoodType
+    comment: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Modelo para lembrete
+
+class ReminderCreate(BaseModel):
+    message: str = Field(..., min_length=1, max_length=280)
+    # envie no formato ISO 8601 (ex.: "2025-08-10T14:00:00Z")
+    due_at: datetime
+
+class ReminderResponse(BaseModel):
+    id: int
+    message: str
+    due_at: datetime
+    done: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True  # pydantic v2

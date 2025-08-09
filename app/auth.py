@@ -1,70 +1,53 @@
-# importações necessárias de hora e data
-from datetime import datetime, timedelta
-# Importa o JWT para manipulação de tokens
-from jose import JWTError, jwt
+# app/auth.py
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-# FastAPI Authentication Module
-from fastapi import Depends, HTTPException
-from fastapi.security import APIKeyHeader
-from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
 
-
-# Importa o modelo de usuário e a função de obter o banco de dados
 from app.database import get_db
 from app.models import User
 
-# 🔑 Chave secreta para assinar os tokens (use uma chave forte em produção!)
-SECRET_KEY = "minha_chave_super_secreta"
+# Dica: mova para env/variáveis de ambiente em produção
+SECRET_KEY = "CHANGE_ME_SUPER_SECRET_KEY"
 ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# Tempo padrão de expiração do token (30 min)
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# Função para criar um token de acesso JWT
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """
-    Gera um token JWT com os dados fornecidos (ex: {"sub": email}).
-    """
-    to_encode = data.copy()
-
-    # Define expiração do token
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-
-    # Cria e retorna o token
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-# validate and decode a JWT access token
-def decode_access_token(token: str) -> dict | None:
-    """
-    Valida e decodifica um token JWT. Retorna o payload ou None se inválido/expirado.
-    """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        return None
-
-# Endpoint de login que fornece o token
-# Vai buscar o token diretamente no header Authorization
-# Agora o Swagger sabe que para autenticar deve usar /token
+# Tem que bater com o endpoint que emite o token no main.py ("/token")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Função para obter o usuário atual a partir do token
-# Esta função é usada como dependência nas rotas que precisam de autenticação
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    # Remove o prefixo Bearer se vier junto
-    if token.startswith("Bearer "):
-        token = token.split(" ")[1]
 
-    payload = decode_access_token(token)
-    if not payload or "sub" not in payload:
-        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = (datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-    user = db.query(User).filter(User.email == payload["sub"]).first()
+
+def decode_access_token(token: str) -> dict:
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Não autenticado",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = decode_access_token(token)
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = db.query(User).filter(User.email == email).first()
     if not user:
-        raise HTTPException(status_code=401, detail="Usuário não encontrado")
-
+        raise credentials_exception
     return user
