@@ -26,12 +26,22 @@ from app.schemas import MoodCreate, MoodResponse
 from app.models import User, Reminder
 from app.schemas import ReminderCreate, ReminderResponse
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # Cria as tabelas automaticamente
 #Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+# Permite qualquer origem
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cuidado: isso libera para qualquer site
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Config para hash de senha
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
