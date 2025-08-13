@@ -54,3 +54,20 @@ class MoodResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Modelo para lembrete
+
+class ReminderCreate(BaseModel):
+    message: str = Field(..., min_length=1, max_length=280)
+    # envie no formato ISO 8601 (ex.: "2025-08-10T14:00:00Z")
+    due_at: datetime
+
+class ReminderResponse(BaseModel):
+    id: int
+    message: str
+    due_at: datetime
+    done: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True  # pydantic v2

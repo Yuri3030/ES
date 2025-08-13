@@ -23,8 +23,12 @@ from app.models import User, Mood
 from fastapi import Body
 
 from app.schemas import MoodCreate, MoodResponse
+from app.models import User, Reminder
+from app.schemas import ReminderCreate, ReminderResponse
+
+
 # Cria as tabelas automaticamente
-Base.metadata.create_all(bind=engine)
+#Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -202,4 +206,74 @@ def list_user_moods_as_admin(
     if not target:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    return db.query(Mood).filter(Mood.user_id == target.id).order_by(Mood.created_at.desc()).all()
+    return db.query(Mood).filter(Mood.user_id == target.id).order_by(Mood.created_at.desc()).all()# criar lembrete
+
+# criar lembrete
+@app.post("/reminders", response_model=ReminderResponse)
+def create_reminder(
+    payload: ReminderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reminder = Reminder(
+        user_id=current_user.id,
+        message=payload.message,
+        due_at=payload.due_at,
+    )
+    db.add(reminder)
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+# listar só meus lembretes
+@app.get("/reminders", response_model=list[ReminderResponse])
+def list_my_reminders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return (
+        db.query(Reminder)
+        .filter(Reminder.user_id == current_user.id)
+        .order_by(Reminder.due_at.asc())
+        .all()
+    )
+
+# marcar como feito / desfazer
+@app.patch("/reminders/{reminder_id}/done", response_model=ReminderResponse)
+def toggle_done(
+    reminder_id: int,
+    done: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reminder = (
+        db.query(Reminder)
+        .filter(Reminder.id == reminder_id, Reminder.user_id == current_user.id)
+        .first()
+    )
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Lembrete não encontrado")
+    reminder.done = done
+    db.commit()
+    db.refresh(reminder)
+    return reminder
+
+# deletar lembrete
+@app.delete("/reminders/{reminder_id}")
+def delete_reminder(
+    reminder_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reminder = (
+        db.query(Reminder)
+        .filter(Reminder.id == reminder_id, Reminder.user_id == current_user.id)
+        .first()
+    )
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Lembrete não encontrado")
+    db.delete(reminder)
+    db.commit()
+    return {"message": "Lembrete deletado com sucesso"}
+
+

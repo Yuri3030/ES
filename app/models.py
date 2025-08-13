@@ -5,7 +5,8 @@ from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, CheckConst
 from sqlalchemy.orm import relationship, backref
 import enum
 from sqlalchemy import Enum as SqlEnum
-
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func
+from sqlalchemy.orm import relationship, backref
 
 # app/models.py# Importa a Base do arquivo database.py para definir os modelos
 # Define o modelo User 
@@ -45,3 +46,16 @@ class Mood(Base):
         "User",
         backref=backref("moods", cascade="all, delete-orphan")
     )
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    message = Column(String, nullable=False)
+    due_at = Column(DateTime(timezone=True), nullable=False)
+    done = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    user = relationship("User", backref=backref("reminders", cascade="all, delete-orphan"))
