@@ -10,3 +10,5 @@ python-multipart
 pytest
 pytest-asyncio
 httpx
+fastapi-mail==1.4.1
+email-validator==2.2.0
