@@ -7,10 +7,10 @@ from app.database import Base, engine, get_db
 from app import models
 from app.models import User
 # Importa schemas necessários
-from app.schemas import UserCreate, UserResponse
+from app.schemas import UserCreate, UserResponse, PasswordResetRequest, PasswordResetConfirm
 from app.schemas import LoginRequest, LoginResponse
 # Importa a função de criação de token
-from datetime import timedelta
+
 from app.auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
 
 # para conseguir o autorization automático no sweagger
@@ -28,6 +28,10 @@ from app.schemas import ReminderCreate, ReminderResponse
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+import secrets
+from datetime import datetime, timedelta, timezone
+from app.models import User, PasswordResetToken
 
 # Cria as tabelas automaticamente
 #Base.metadata.create_all(bind=engine)
@@ -66,7 +70,8 @@ def read_current_user(current_user: User = Depends(get_current_user)):
         "name": current_user.name,
         "email": current_user.email,
         "is_active": current_user.is_active,
-        "created_at": current_user.created_at
+        "created_at": current_user.created_at,
+        "date_of_birth": current_user.date_of_birth   
     }
 
 # Rota para criar usuário
@@ -81,7 +86,8 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     new_user = models.User(
         name=user.name,
         email=user.email,
-        password_hash=hash_password(user.password)
+        password_hash=hash_password(user.password),
+        date_of_birth=user.date_of_birth 
     )
     db.add(new_user)
     db.commit()
@@ -109,13 +115,14 @@ def delete_user(
     if current_user.email != "admin@example.com":
         raise HTTPException(status_code=403, detail="Apenas o administrador pode deletar usuários")
 
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    db.delete(user)
+    user.deleted_at = datetime.utcnow()
+    user.is_active = False
     db.commit()
-    return {"message": f"Usuário {email} deletado com sucesso"}
+    return {"message": "Usuário marcado como excluído"}
 
 
 
@@ -159,6 +166,69 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         "access_token": access_token,
         "token_type": "bearer"
     }
+RESET_TOKEN_EXPIRE_MINUTES = 60  # 1h
+
+@app.post("/password-reset/request")
+def password_reset_request(payload: PasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    # Por segurança, não revelamos se o e-mail existe ou não.
+    # Se existir, criamos o token; se não, retornamos a mesma mensagem.
+
+    if user:
+        # invalida tokens antigos ainda não usados (opcional)
+        db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None)
+        ).delete(synchronize_session=False)
+
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+
+        db.add(PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=expires_at
+        ))
+        db.commit()
+
+        # Aqui você enviaria email com o token. Em DEV, retornamos o token:
+        return {
+            "message": "Se o e-mail existir, enviaremos instruções para redefinir a senha.",
+            "dev_token": token,  # REMOVA em produção
+            "expires_in_minutes": RESET_TOKEN_EXPIRE_MINUTES
+        }
+
+    return {"message": "Se o e-mail existir, enviaremos instruções para redefinir a senha."}
+
+
+@app.post("/password-reset/confirm")
+def password_reset_confirm(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    prt = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == payload.token
+    ).first()
+
+    if not prt:
+        raise HTTPException(status_code=400, detail="Token inválido")
+
+    if prt.used_at is not None:
+        raise HTTPException(status_code=400, detail="Token já utilizado")
+
+    now = datetime.now(timezone.utc)
+    if prt.expires_at < now:
+        raise HTTPException(status_code=400, detail="Token expirado")
+
+    user = db.query(User).filter(User.id == prt.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # atualiza senha
+    user.password_hash = hash_password(payload.new_password)
+    prt.used_at = now
+
+    db.commit()
+
+    return {"message": "Senha redefinida com sucesso."}
+
 # cria um usuário administrador padrão se não existir
 
 def create_default_admin():

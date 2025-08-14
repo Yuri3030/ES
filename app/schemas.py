@@ -1,22 +1,26 @@
 from pydantic import BaseModel, EmailStr
-from pydantic import BaseModel, conint
-from datetime import datetime
+from pydantic import  conint
+from datetime import datetime, date
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import  Field
 from typing import Optional
 
 
 # Modelo para entrada de cadastro
 class UserCreate(BaseModel):
     name: str
-    email: EmailStr
+    email: str
     password: str
+    date_of_birth: date | None = None  
 
 # Modelo para resposta (não retorna a senha)
 class UserResponse(BaseModel):
     id: int
     name: str
     email: EmailStr
+    date_of_birth: date | None = None
+    is_active: bool
+    created_at: datetime
 
     class Config:
         orm_mode = True
@@ -71,3 +75,11 @@ class ReminderResponse(BaseModel):
 
     class Config:
         from_attributes = True  # pydantic v2
+
+# Modelo para reset de senha
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(..., min_length=10)
+    new_password: str = Field(..., min_length=6)
