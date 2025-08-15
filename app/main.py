@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException,APIRouter, status
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
-from app.database import Base, engine, get_db
+from app.database import Base, engine, get_db, engine
 # Importa os modelos necessários
 from app import models
 from app.models import User
@@ -12,7 +12,8 @@ from app.schemas import LoginRequest, LoginResponse
 # Importa a função de criação de token
 
 from app.auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
-
+from typing import List, Optional
+from datetime import datetime
 # para conseguir o autorization automático no sweagger
 from fastapi.security import OAuth2PasswordRequestForm
 # para a criação do administrador padrão
@@ -33,8 +34,17 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from app.models import User, PasswordResetToken
 
+from app.database import SessionLocal
+from app.models import EmergencyContact
+from app.database import get_db
+from app.models import EmergencyContact
+from app.schemas import EmergencyContactCreate, EmergencyContactResponse
+from app.auth import get_current_user
 # Cria as tabelas automaticamente
+
 #Base.metadata.create_all(bind=engine)
+
+
 
 app = FastAPI()
 
@@ -357,3 +367,96 @@ def delete_reminder(
     return {"message": "Lembrete deletado com sucesso"}
 
 
+DEFAULT_BR_CONTACTS = [
+    {"name": "Polícia Militar", "phone": "190", "category": "seguranca"},
+    {"name": "SAMU (Ambulância)", "phone": "192", "category": "saude"},
+    {"name": "Bombeiros", "phone": "193", "category": "seguranca"},
+    {"name": "Defesa Civil", "phone": "199", "category": "defesa"},
+    {"name": "Delegacia da Mulher", "phone": "180", "category": "direitos"},
+    {"name": "Disque Denúncia", "phone": "181", "category": "seguranca"},
+    {"name": "CVV - Prevenção ao Suicídio", "phone": "188", "category": "saude"},
+    {"name": "PRF - Polícia Rodoviária Federal", "phone": "191", "category": "seguranca"},
+    {"name": "Disque Saúde (SUS)", "phone": "136", "category": "saude"},
+]
+
+def ensure_default_emergency_contacts():
+    db: Session = SessionLocal()
+    try:
+        # verifica se já existe algum default
+        exists = db.query(EmergencyContact).filter(
+            EmergencyContact.is_default.is_(True),
+            EmergencyContact.deleted_at.is_(None)
+        ).first()
+        if exists:
+            return
+
+        for c in DEFAULT_BR_CONTACTS:
+            db.add(EmergencyContact(
+                user_id=None,
+                name=c["name"],
+                phone=c["phone"],
+                category=c.get("category"),
+                is_default=True
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+def is_admin(user) -> bool:
+    # adapte à sua lógica; ex: admin por email
+    return user.email == "admin@example.com"
+
+@app.get("/{contact_id}", response_model=List[EmergencyContactResponse])
+def list_all_contacts(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Lista contatos padrão + contatos do usuário logado (soft-delete ignorado)."""
+    q = db.query(EmergencyContact).filter(EmergencyContact.deleted_at.is_(None)).filter(
+        (EmergencyContact.is_default.is_(True)) |
+        (EmergencyContact.user_id == current_user.id)
+    ).order_by(EmergencyContact.is_default.desc(), EmergencyContact.name.asc())
+    return q.all()
+
+@app.post("/{contact_id}", response_model=EmergencyContactResponse, status_code=201)
+def create_contact(
+    payload: EmergencyContactCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Cria um contato pessoal do usuário."""
+    ec = EmergencyContact(
+        user_id=current_user.id,
+        name=payload.name,
+        phone=payload.phone,
+        category=payload.category,
+        is_default=False
+    )
+    db.add(ec)
+    db.commit()
+    db.refresh(ec)
+    return ec
+
+@app.delete("/{contact_id}", status_code=200)
+def delete_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Soft delete: só pode deletar seus contatos; admin pode deletar qualquer um."""
+    ec = db.query(EmergencyContact).filter(EmergencyContact.id == contact_id).first()
+    if not ec or ec.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Contato não encontrado")
+
+    if ec.is_default and not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Apenas admin pode excluir contatos padrão")
+
+    if (not ec.is_default) and (ec.user_id != current_user.id) and (not is_admin(current_user)):
+        raise HTTPException(status_code=403, detail="Sem permissão para excluir este contato")
+
+    ec.deleted_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Contato excluído com sucesso (soft delete)."}
+
+# registre o router no app principal
+# app.include_router(router_ec)

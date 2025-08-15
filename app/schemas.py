@@ -83,3 +83,21 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str = Field(..., min_length=10)
     new_password: str = Field(..., min_length=6)
+
+
+# -------- Emergency Contacts --------
+class EmergencyContactBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=80)
+    phone: str = Field(..., min_length=2, max_length=30)
+    category: Optional[str] = None
+
+class EmergencyContactCreate(EmergencyContactBase):
+    pass  # usuário cria contatos próprios com esses campos
+
+class EmergencyContactResponse(EmergencyContactBase):
+    id: int
+    is_default: bool
+    created_at: datetime
+    deleted_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}

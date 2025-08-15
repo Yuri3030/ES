@@ -23,14 +23,14 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     date_of_birth = Column(Date, nullable=True)  
     deleted_at = Column(DateTime, nullable=True)
-
+# Define o modelo MoodType como uma Enumeração
 class MoodType(str, enum.Enum):
     alegria = "alegria"
     tristeza = "tristeza"
     angustia = "angustia"
     magoa = "mágoa"
     ansiedade = "ansiedade"
-
+# Define o modelo Mood
 class Mood(Base):
     __tablename__ = "moods"
 
@@ -50,7 +50,7 @@ class Mood(Base):
         backref=backref("moods", cascade="all, delete-orphan")
     )
 
-
+# Modelo para lembretes
 class Reminder(Base):
     __tablename__ = "reminders"
 
@@ -63,7 +63,7 @@ class Reminder(Base):
 
     user = relationship("User", backref=backref("reminders", cascade="all, delete-orphan"))
 
-
+# Modelo para tokens de redefinição de senha
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
 
@@ -75,3 +75,20 @@ class PasswordResetToken(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     user = relationship("User")
+
+# Modelo para contatos de emergência
+class EmergencyContact(Base):
+    __tablename__ = "emergency_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # se for um contato global (padrão), user_id = None e is_default = True
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    name = Column(String, nullable=False)        # ex: "Polícia Militar"
+    phone = Column(String, nullable=False)       # ex: "190"
+    category = Column(String, nullable=True)     # ex: "segurança", "saúde"
+    is_default = Column(Boolean, default=False)  # True = contato padrão do sistema
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    deleted_at = Column(DateTime, nullable=True) # soft delete
+
+    user = relationship("User", backref="emergency_contacts")
