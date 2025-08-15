@@ -460,3 +460,7 @@ def delete_contact(
 
 # registre o router no app principal
 # app.include_router(router_ec)
+
+@app.get("/emergency-contacts/default")
+def get_default_emergency_contacts():
+    return {"contacts": DEFAULT_BR_CONTACTS}
