@@ -1,16 +1,16 @@
-FROM python:3.11
+FROM python:3.11-slim
 
-# Pasta de trabalho dentro do container
+
 WORKDIR /app
 
-# Copia as dependências primeiro (para cachear melhor)
+
 COPY requirements.txt .
 
-# Instala dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o código da aplicação
 COPY . .
 
-# Comando padrão ao rodar o container
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+#configiração inicial para rodar o python em docker, essa é a imagem que eu criei

@@ -1,13 +1,17 @@
 version: "3.9"
-
+# conexão web
 services:
   web:
     build: .
     container_name: fastapi_web
     volumes:
-    - .:/app  # <-- monta todo o projeto local dentro do container
+    - .:/app  
     ports:
       - "8000:8000"
+    
+    env_file:
+      - ./.env
+    
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -16,8 +20,8 @@ services:
       PYTHONPATH: /app
     depends_on:
       db:
-        condition: service_healthy  # Só inicia depois que o db estiver saudável
-
+        condition: service_healthy  
+# conexão db 
   db:
     image: postgres:15
     container_name: fastapi_db
@@ -29,12 +33,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck: #  garante que só fica "healthy" depois de pronto
+    healthcheck: 
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5   
-
+# conexão  pgadmin
   pgadmin:
     image: dpage/pgadmin4
     container_name: fastapi_pgadmin

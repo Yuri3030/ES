@@ -1,103 +1,91 @@
-from pydantic import BaseModel, EmailStr
-from pydantic import  conint
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, date
 from enum import Enum
-from pydantic import  Field
 from typing import Optional
 
+# -------- login --------
 
-# Modelo para entrada de cadastro
-class UserCreate(BaseModel):
-    name: str
-    email: str
-    password: str
-    date_of_birth: date | None = None  
-
-# Modelo para resposta (não retorna a senha)
-class UserResponse(BaseModel):
-    id: int
-    name: str
-    email: EmailStr
-    date_of_birth: date | None = None
-    is_active: bool
-    created_at: datetime
-
-    class Config:
-        orm_mode = True
-
-
-# Modelo para login
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-# Modelo para resposta de login
-class LoginResponse(BaseModel):
-    message: str
-    token: str | None = None  
+# -------- Pessoas --------
 
-# Modelos para Mood
-class MoodType(str, Enum):
+class PessoaCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str = Field(..., min_length=6)   # <- senha enviada no cadastro
+    date_of_birth: date | None = None
+
+class PessoaResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    is_active: bool
+    created_at: datetime
+    date_of_birth: date | None = None
+
+    model_config = {"from_attributes": True}  # pydantic v2
+
+
+# -------- Check-ins --------
+class CheckInType(str, Enum):
     alegria = "alegria"
     tristeza = "tristeza"
     angustia = "angustia"
     magoa = "mágoa"
     ansiedade = "ansiedade"
 
-class MoodCreate(BaseModel):
+class CheckInCreate(BaseModel):
     score: int = Field(..., ge=1, le=5)
-    mood_type: MoodType  # <-- escolha obrigatória
+    checkin_type: CheckInType
     comment: Optional[str] = None
 
-class MoodResponse(BaseModel):
+class CheckInResponse(BaseModel):
     id: int
     score: int
-    mood_type: MoodType
+    checkin_type: CheckInType
     comment: Optional[str]
     created_at: datetime
+    model_config = {"from_attributes": True}
 
-    class Config:
-        from_attributes = True
-
-# Modelo para lembrete
-
-class ReminderCreate(BaseModel):
+# -------- Lembretes --------
+class LembreteCreate(BaseModel):
     message: str = Field(..., min_length=1, max_length=280)
-    # envie no formato ISO 8601 (ex.: "2025-08-10T14:00:00Z")
     due_at: datetime
 
-class ReminderResponse(BaseModel):
+class LembreteResponse(BaseModel):
     id: int
     message: str
     due_at: datetime
     done: bool
     created_at: datetime
+    model_config = {"from_attributes": True}
 
-    class Config:
-        from_attributes = True  # pydantic v2
-
-# Modelo para reset de senha
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
-
-class PasswordResetConfirm(BaseModel):
-    token: str = Field(..., min_length=10)
-    new_password: str = Field(..., min_length=6)
-
-
-# -------- Emergency Contacts --------
-class EmergencyContactBase(BaseModel):
+# -------- Contatos de Emergência --------
+class ContatoEmergenciaBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=80)
     phone: str = Field(..., min_length=2, max_length=30)
     category: Optional[str] = None
 
-class EmergencyContactCreate(EmergencyContactBase):
-    pass  # usuário cria contatos próprios com esses campos
+class ContatoEmergenciaCreate(ContatoEmergenciaBase):
+    pass
 
-class EmergencyContactResponse(EmergencyContactBase):
+class ContatoEmergenciaResponse(ContatoEmergenciaBase):
     id: int
     is_default: bool
     created_at: datetime
     deleted_at: Optional[datetime] = None
-
     model_config = {"from_attributes": True}
+
+
+# -------- autenticação --------
+class SignupCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    date_of_birth: date | None = None
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
