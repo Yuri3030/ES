@@ -5,6 +5,8 @@ from app.core.settings import get_settings
 from contextlib import asynccontextmanager
 from app.models import Pessoa
 from app.auth import hash_password
+from app.startup import run_startup_tasks
+
 
 from app.routers.pessoas import router as pessoas_router
 from app.routers.check_ins import router as check_ins_router
@@ -15,32 +17,17 @@ from app.routers.auth import router as auth_router
 
 
 
-ADMIN_EMAIL = "admin@example.com"  
-ADMIN_PASS  = "admin"
 
-def ensure_admin():
-    db = SessionLocal()
-    try:
-        if not db.query(Pessoa).filter(Pessoa.email == ADMIN_EMAIL).first():
-            db.add(Pessoa(
-                name="Administrador",
-                email=ADMIN_EMAIL,
-                password_hash=hash_password(ADMIN_PASS),
-                is_active=True,
-            ))
-            db.commit()
-    finally:
-        db.close()
+settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # popula contatos padrão uma única vez (idempotente)
-    ensure_default_emergency_contacts()
+    run_startup_tasks()
     yield
 
+app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
-settings = get_settings()
-app = FastAPI(title=getattr(settings, "APP_NAME", "Minha API"))
+
 
 app.add_middleware(
     CORSMiddleware,
