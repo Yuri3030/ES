@@ -39,7 +39,7 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"message": "🚀 FastAPI + PostgreSQL funcionando! (sem autenticação)"}
+    return {"message": " FastAPI + PostgreSQL funcionando! (sem autenticação)"}
 
 # registra novos routers
 app.include_router(auth_router)

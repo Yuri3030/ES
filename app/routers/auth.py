@@ -38,7 +38,7 @@ def login_for_access_token(
 def login_json(payload: LoginRequest, db: Session = Depends(get_db)):
     pessoa = db.query(Pessoa).filter(Pessoa.email == payload.email).first()
     if not pessoa or not verify_password(payload.password, pessoa.password_hash or ""):
-        # ⇩ seu requisito: 400 em caso de credenciais inválidas
+        #  seu requisito: 400 em caso de credenciais inválidas
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-mail ou senha inválidos")
 
     settings = get_settings()

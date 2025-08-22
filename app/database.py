@@ -22,7 +22,7 @@ POSTGRES_HOST = os.getenv("POSTGRES_HOST", "db")
 
 default_url = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:5432/{POSTGRES_DB}"
 DATABASE_URL = getattr(settings, "DATABASE_URL", None) or os.getenv("DATABASE_URL") or default_url
-# ↑ psycopg2-binary => use "postgresql://..."
+# psycopg2-binary => use "postgresql://..."
 
 # 2) Engine e sessão
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # Banco (psycopg2-binary => postgresql://)
     DATABASE_URL: str = "postgresql://postgres:postgres@db:5432/appdb"
 
-    # 🔐 JWT
+    #  JWT
     SECRET_KEY: str = "CHANGE_ME_SUPER_SECRET_KEY"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60

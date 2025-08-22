@@ -21,7 +21,7 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     return bool(hashed) and pwd_context.verify(plain, hashed)
 
-# ⚠️ tem que bater com o seu endpoint real de login (/token)
+#  tem que bater com o seu endpoint real de login (/token)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # JWT helpers
